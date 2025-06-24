@@ -6,6 +6,7 @@ import numpy as np
 def process_gpr_excel(file):
     # Read Excel (assume first sheet, header in row 1)
     df = pd.read_excel(file, engine="openpyxl")
+    # Only keep the first 4 columns
     df = df.iloc[:, :4]
     df.columns = ['AC', 'Base', 'SubBase', 'Lower SubBase']
     df.insert(0, 'Chainage', [(i+1)*0.25 for i in range(len(df))])
@@ -17,16 +18,13 @@ def process_gpr_excel(file):
         vals = [row['AC'], row['Base'], row['SubBase'], row['Lower SubBase']]
         cumsums = []
         running_sum = 0
-        found_missing = False
         for v in vals:
             # If value is missing or not a number, stop and fill the rest with None
-            if (v is None) or (isinstance(v, float) and np.isnan(v)):
-                found_missing = True
+            if v is None or (isinstance(v, float) and np.isnan(v)):
                 break
             try:
                 running_sum += float(v)
             except Exception:
-                found_missing = True
                 break
             cumsums.append(running_sum)
         # Fill the rest with None if missing found
@@ -51,22 +49,27 @@ def plot_gpr_chart(df, file_name):
         'Lower SubBase': 'rgb(112,173,71)'
     }
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=df['Chainage'], y=df['AC_boundary'],
-        mode='lines', name='AC', line=dict(color=colors['AC'], width=3)
-    ))
-    fig.add_trace(go.Scatter(
-        x=df['Chainage'], y=df['Base_boundary'],
-        mode='lines', name='Base', line=dict(color=colors['Base'], width=3)
-    ))
-    fig.add_trace(go.Scatter(
-        x=df['Chainage'], y=df['SubBase_boundary'],
-        mode='lines', name='SubBase', line=dict(color=colors['SubBase'], width=3)
-    ))
-    fig.add_trace(go.Scatter(
-        x=df['Chainage'], y=df['LowerSubBase_boundary'],
-        mode='lines', name='Lower SubBase', line=dict(color=colors['Lower SubBase'], width=3)
-    ))
+    # Only plot if there is at least one non-null value in the series
+    if df['AC_boundary'].notnull().any():
+        fig.add_trace(go.Scatter(
+            x=df['Chainage'], y=df['AC_boundary'],
+            mode='lines', name='AC', line=dict(color=colors['AC'], width=3)
+        ))
+    if df['Base_boundary'].notnull().any():
+        fig.add_trace(go.Scatter(
+            x=df['Chainage'], y=df['Base_boundary'],
+            mode='lines', name='Base', line=dict(color=colors['Base'], width=3)
+        ))
+    if df['SubBase_boundary'].notnull().any():
+        fig.add_trace(go.Scatter(
+            x=df['Chainage'], y=df['SubBase_boundary'],
+            mode='lines', name='SubBase', line=dict(color=colors['SubBase'], width=3)
+        ))
+    if df['LowerSubBase_boundary'].notnull().any():
+        fig.add_trace(go.Scatter(
+            x=df['Chainage'], y=df['LowerSubBase_boundary'],
+            mode='lines', name='Lower SubBase', line=dict(color=colors['Lower SubBase'], width=3)
+        ))
     fig.update_layout(
         title=file_name,
         xaxis=dict(
@@ -106,17 +109,29 @@ if uploaded_files:
     for file in uploaded_files:
         file_name = file.name
         df = process_gpr_excel(file)
-        fig = plot_gpr_chart(df, file_name.split('.')[0])
-        st.subheader(f"Chart for: {file_name}")
-        st.plotly_chart(fig, use_container_width=True)
-        # Download as PNG (Plotly >=5.0 required)
-        try:
-            img_bytes = fig.to_image(format="png")
-            st.download_button(
-                label=f"Download {file_name.split('.')[0]} Chart as PNG",
-                data=img_bytes,
-                file_name=f"{file_name.split('.')[0]}_chart.png",
-                mime="image/png"
-            )
-        except Exception as e:
-            st.info("PNG download not available. (Plotly version may be <5.0 or kaleido not installed)")
+        st.subheader(f"Preview of processed data for: {file_name}")
+        st.write(df.head(20))  # Show the first 20 rows for debugging
+
+        # Check if all boundary columns are empty
+        if (
+            df['AC_boundary'].notnull().sum() == 0 and
+            df['Base_boundary'].notnull().sum() == 0 and
+            df['SubBase_boundary'].notnull().sum() == 0 and
+            df['LowerSubBase_boundary'].notnull().sum() == 0
+        ):
+            st.warning("No valid data to plot. Please check your Excel file for correct structure and numeric values.")
+        else:
+            fig = plot_gpr_chart(df, file_name.split('.')[0])
+            st.subheader(f"Chart for: {file_name}")
+            st.plotly_chart(fig, use_container_width=True)
+            # Download as PNG (Plotly >=5.0 required)
+            try:
+                img_bytes = fig.to_image(format="png")
+                st.download_button(
+                    label=f"Download {file_name.split('.')[0]} Chart as PNG",
+                    data=img_bytes,
+                    file_name=f"{file_name.split('.')[0]}_chart.png",
+                    mime="image/png"
+                )
+            except Exception as e:
+                st.info("PNG download not available. (Plotly version may be <5.0 or kaleido not installed)")
