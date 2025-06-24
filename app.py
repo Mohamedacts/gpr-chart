@@ -3,52 +3,38 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 
-# --- Function to process a single Excel file and return processed DataFrame ---
 def process_gpr_excel(file):
     # Read Excel (assume first sheet, header in row 1)
     df = pd.read_excel(file, engine="openpyxl")
-    
-    # Ensure at least 4 columns for layers
     df = df.iloc[:, :4]
     df.columns = ['AC', 'Base', 'SubBase', 'Lower SubBase']
-    
-    # Add Chainage column (0.25, 0.50, ...)
     df.insert(0, 'Chainage', [(i+1)*0.25 for i in range(len(df))])
-    
-    # Cumulative boundary calculation with stop-at-empty logic
-    boundaries = []
-    for _, row in df.iterrows():
-        vals = [None, None, None, None]
-        # AC boundary
-        if pd.notnull(row['AC']):
-            vals[0] = row['AC']
-        else:
-            boundaries.append(vals)
-            continue
-        # Base boundary
-        if pd.notnull(row['Base']):
-            vals[1] = vals[0] + row['Base'] if pd.notnull(vals[0]) else None
-        else:
-            boundaries.append(vals)
-            continue
-        # SubBase boundary
-        if pd.notnull(row['SubBase']):
-            vals[2] = vals[1] + row['SubBase'] if pd.notnull(vals[1]) else None
-        else:
-            boundaries.append(vals)
-            continue
-        # Lower SubBase boundary
-        if pd.notnull(row['Lower SubBase']):
-            vals[3] = vals[2] + row['Lower SubBase'] if pd.notnull(vals[2]) else None
-        boundaries.append(vals)
+
+    # Prepare boundaries DataFrame
+    boundaries = pd.DataFrame(index=df.index, columns=['AC_boundary', 'Base_boundary', 'SubBase_boundary', 'LowerSubBase_boundary'])
+
+    # For each row, compute cumulative sum, but set all after first missing to NaN
+    for idx, row in df.iterrows():
+        vals = [row['AC'], row['Base'], row['SubBase'], row['Lower SubBase']]
+        # Find first missing
+        try:
+            first_nan = next(i for i, v in enumerate(vals) if pd.isnull(v))
+        except StopIteration:
+            first_nan = 4  # No missing, use all
+        # Compute cumulative sum up to first missing
+        valid_vals = vals[:first_nan]
+        cumsums = pd.Series(valid_vals).cumsum().tolist()
+        # Fill boundaries: cumsums, then NaN for the rest
+        full = cumsums + [np.nan] * (4 - len(cumsums))
+        boundaries.loc[idx] = full
+
     # Add boundaries to DataFrame
-    df['AC_boundary'] = [b[0] for b in boundaries]
-    df['Base_boundary'] = [b[1] for b in boundaries]
-    df['SubBase_boundary'] = [b[2] for b in boundaries]
-    df['LowerSubBase_boundary'] = [b[3] for b in boundaries]
+    df['AC_boundary'] = boundaries['AC_boundary']
+    df['Base_boundary'] = boundaries['Base_boundary']
+    df['SubBase_boundary'] = boundaries['SubBase_boundary']
+    df['LowerSubBase_boundary'] = boundaries['LowerSubBase_boundary']
     return df
 
-# --- Function to plot the processed DataFrame as a Plotly chart ---
 def plot_gpr_chart(df, file_name):
     colors = {
         'AC': 'black',
@@ -57,7 +43,6 @@ def plot_gpr_chart(df, file_name):
         'Lower SubBase': 'rgb(112,173,71)'
     }
     fig = go.Figure()
-    # Add each boundary as a line
     fig.add_trace(go.Scatter(
         x=df['Chainage'], y=df['AC_boundary'],
         mode='lines', name='AC', line=dict(color=colors['AC'], width=3)
@@ -74,7 +59,6 @@ def plot_gpr_chart(df, file_name):
         x=df['Chainage'], y=df['LowerSubBase_boundary'],
         mode='lines', name='Lower SubBase', line=dict(color=colors['Lower SubBase'], width=3)
     ))
-    # Layout settings
     fig.update_layout(
         title=file_name,
         xaxis=dict(
@@ -92,12 +76,10 @@ def plot_gpr_chart(df, file_name):
         margin=dict(l=60, r=20, t=60, b=60),
         height=600
     )
-    # Only horizontal gridlines
     fig.update_xaxes(showgrid=False)
     fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='lightgray')
     return fig
 
-# --- Streamlit UI ---
 st.set_page_config(page_title="GPR Depth Profile Chart Generator", layout="wide")
 st.title("GPR Depth Profile Chart Generator")
 
@@ -115,9 +97,7 @@ uploaded_files = st.file_uploader(
 if uploaded_files:
     for file in uploaded_files:
         file_name = file.name
-        # Process data
         df = process_gpr_excel(file)
-        # Plot chart
         fig = plot_gpr_chart(df, file_name.split('.')[0])
         st.subheader(f"Chart for: {file_name}")
         st.plotly_chart(fig, use_container_width=True)
