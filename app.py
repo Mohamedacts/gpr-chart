@@ -17,14 +17,19 @@ def process_gpr_excel(file):
         vals = [row['AC'], row['Base'], row['SubBase'], row['Lower SubBase']]
         cumsums = []
         running_sum = 0
+        found_missing = False
         for v in vals:
-            if pd.isnull(v):
-                # Fill the rest with None and break
-                while len(cumsums) < 4:
-                    cumsums.append(None)
+            # If value is missing or not a number, stop and fill the rest with None
+            if (v is None) or (isinstance(v, float) and np.isnan(v)):
+                found_missing = True
                 break
-            running_sum += v
+            try:
+                running_sum += float(v)
+            except Exception:
+                found_missing = True
+                break
             cumsums.append(running_sum)
+        # Fill the rest with None if missing found
         while len(cumsums) < 4:
             cumsums.append(None)
         ac_b.append(cumsums[0])
