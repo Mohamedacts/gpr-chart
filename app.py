@@ -5,7 +5,7 @@ import numpy as np
 
 def process_gpr_excel(file):
     df = pd.read_excel(file, engine="openpyxl")
-    # Ensure lowercase for matching
+    # Lowercase and strip column names for robust matching
     df.columns = [str(col).strip().lower() for col in df.columns]
     # Identify layer columns dynamically
     layer_cols = [col for col in df.columns if "layer" in col]
@@ -61,18 +61,26 @@ def plot_gpr_chart(df, file_name):
             ))
     fig.update_layout(
         title=file_name,
+        font=dict(color='black'),  # Make all chart text black
         xaxis=dict(
             title='Chainage (m)',
-            showline=True, linewidth=3, linecolor='black', mirror=True, ticks='outside'
+            showline=True, linewidth=3, linecolor='black', mirror=True, ticks='outside',
+            tickfont=dict(color='black'),  # X-axis tick labels black
+            titlefont=dict(color='black'), # X-axis title black
         ),
         yaxis=dict(
             title='Depth (m)',
             showline=True, linewidth=3, linecolor='black', mirror=True, ticks='outside',
-            autorange='reversed', range=[100, 0], dtick=10, gridcolor='lightgray'
+            autorange='reversed', range=[100, 0], dtick=10, gridcolor='lightgray',
+            tickfont=dict(color='black'),  # Y-axis tick labels black
+            titlefont=dict(color='black'), # Y-axis title black
         ),
         plot_bgcolor='white',
         paper_bgcolor='white',
-        legend=dict(orientation='h', yanchor='bottom', y=-0.25, xanchor='center', x=0.5),
+        legend=dict(
+            orientation='h', yanchor='bottom', y=-0.25, xanchor='center', x=0.5,
+            font=dict(color='black')  # Legend text black
+        ),
         margin=dict(l=60, r=20, t=60, b=60),
         height=600
     )
