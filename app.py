@@ -60,6 +60,11 @@ def plot_gpr_chart(df, graph_title):
                 x=df['Chainage'], y=df[layer],
                 mode='lines', name=base_name, line=dict(color=color_map.get(base_name, "gray"), width=3)
             ))
+    # Set x-axis to show full chainage and comfortable ticks
+    min_chainage = float(df['Chainage'].min())
+    max_chainage = float(df['Chainage'].max())
+    tick_interval = 5  # Set this to 1, 2, 5, 10 as you prefer
+
     fig.update_layout(
         title=dict(
             text=graph_title,
@@ -73,14 +78,14 @@ def plot_gpr_chart(df, graph_title):
             title=dict(text='Chainage (m)', font=dict(color='black')),
             showline=True, linewidth=3, linecolor='black', mirror=True, ticks='outside',
             tickfont=dict(color='black'),
-            dtick=1,        # Ticks every 1.0 on x-axis
-            tick0=0,        # Start ticks at 0
-            range=[0, 100]  # Fix axis from 0 to 100 (adjust as needed)
+            tickmode='linear',
+            dtick=tick_interval,
+            range=[min_chainage, max_chainage]
         ),
         yaxis=dict(
             title=dict(text='Depth (m)', font=dict(color='black')),
             showline=True, linewidth=3, linecolor='black', mirror=True, ticks='outside',
-            autorange='reversed', range=[100, 0], dtick=10, gridcolor='lightgray',
+            autorange='reversed', dtick=10, gridcolor='lightgray',
             tickfont=dict(color='black')
         ),
         plot_bgcolor='white',
