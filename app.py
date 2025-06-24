@@ -60,26 +60,27 @@ def plot_gpr_chart(df, file_name):
                 mode='lines', name=base_name, line=dict(color=color_map.get(base_name, "gray"), width=3)
             ))
     fig.update_layout(
-        title=file_name,
-        font=dict(color='black'),  # Make all chart text black
+        title=dict(
+            text=file_name,
+            font=dict(color='black')
+        ),
+        font=dict(color='black'),
         xaxis=dict(
-            title='Chainage (m)',
+            title=dict(text='Chainage (m)', font=dict(color='black')),
             showline=True, linewidth=3, linecolor='black', mirror=True, ticks='outside',
-            tickfont=dict(color='black'),  # X-axis tick labels black
-            titlefont=dict(color='black'), # X-axis title black
+            tickfont=dict(color='black')
         ),
         yaxis=dict(
-            title='Depth (m)',
+            title=dict(text='Depth (m)', font=dict(color='black')),
             showline=True, linewidth=3, linecolor='black', mirror=True, ticks='outside',
             autorange='reversed', range=[100, 0], dtick=10, gridcolor='lightgray',
-            tickfont=dict(color='black'),  # Y-axis tick labels black
-            titlefont=dict(color='black'), # Y-axis title black
+            tickfont=dict(color='black')
         ),
         plot_bgcolor='white',
         paper_bgcolor='white',
         legend=dict(
             orientation='h', yanchor='bottom', y=-0.25, xanchor='center', x=0.5,
-            font=dict(color='black')  # Legend text black
+            font=dict(color='black')
         ),
         margin=dict(l=60, r=20, t=60, b=60),
         height=600
