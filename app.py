@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
+import math
 
 # --- Password protection ---
 def password_protect():
@@ -45,6 +46,25 @@ def process_gpr_excel(file):
         df_layers[f"{name}_boundary"] = [b[idx] for b in boundaries]
     return df_layers
 
+def nice_tick_interval(data_min, data_max, target_ticks=10):
+    """Choose a 'nice' tick interval for the axis given data range and target number of ticks."""
+    data_range = data_max - data_min
+    if data_range == 0:
+        return 1
+    raw_interval = data_range / target_ticks
+    # Round to nearest 1, 2, 5, or 10 multiple
+    magnitude = 10 ** math.floor(math.log10(raw_interval))
+    residual = raw_interval / magnitude
+    if residual < 1.5:
+        nice = 1 * magnitude
+    elif residual < 3:
+        nice = 2 * magnitude
+    elif residual < 7:
+        nice = 5 * magnitude
+    else:
+        nice = 10 * magnitude
+    return nice
+
 def plot_gpr_chart(df, graph_title):
     color_map = {
         "Layer 1": "black",
@@ -60,10 +80,12 @@ def plot_gpr_chart(df, graph_title):
                 x=df['Chainage'], y=df[layer],
                 mode='lines', name=base_name, line=dict(color=color_map.get(base_name, "gray"), width=3)
             ))
-    # Set x-axis to show full chainage and comfortable ticks
+
+    # X-axis: full chainage, nice interval
     min_chainage = float(df['Chainage'].min())
     max_chainage = float(df['Chainage'].max())
-    tick_interval = 5  # Set this to 1, 2, 5, 10 as you prefer
+    tick0 = min_chainage
+    dtick = nice_tick_interval(min_chainage, max_chainage, target_ticks=10)
 
     fig.update_layout(
         title=dict(
@@ -79,13 +101,14 @@ def plot_gpr_chart(df, graph_title):
             showline=True, linewidth=3, linecolor='black', mirror=True, ticks='outside',
             tickfont=dict(color='black'),
             tickmode='linear',
-            dtick=tick_interval,
+            tick0=tick0,
+            dtick=dtick,
             range=[min_chainage, max_chainage]
         ),
         yaxis=dict(
             title=dict(text='Depth (m)', font=dict(color='black')),
             showline=True, linewidth=3, linecolor='black', mirror=True, ticks='outside',
-            autorange='reversed', dtick=10, gridcolor='lightgray',
+            autorange=False, range=[100, 0], dtick=10, gridcolor='lightgray',
             tickfont=dict(color='black')
         ),
         plot_bgcolor='white',
