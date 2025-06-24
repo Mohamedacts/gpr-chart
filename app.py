@@ -69,7 +69,10 @@ def plot_gpr_chart(df, graph_title):
         xaxis=dict(
             title=dict(text='Chainage (m)', font=dict(color='black')),
             showline=True, linewidth=3, linecolor='black', mirror=True, ticks='outside',
-            tickfont=dict(color='black')
+            tickfont=dict(color='black'),
+            dtick=1,        # Ticks every 1.0 on x-axis
+            tick0=0,        # Start ticks at 0
+            range=[0, 100]  # Fix axis from 0 to 100 (adjust as needed)
         ),
         yaxis=dict(
             title=dict(text='Depth (m)', font=dict(color='black')),
@@ -90,17 +93,6 @@ def plot_gpr_chart(df, graph_title):
     fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='lightgray')
     return fig
 
-st.markdown(
-    """
-    <style>
-    .main, .block-container, .stTextInput label, .stTextInput input, .stButton button, .stMarkdown, .stSubheader, .stTitle {
-        color: black !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 st.header("Welcome to the GPR Depth Profile Chart Generator", divider="rainbow")
 
 st.markdown("""
@@ -110,7 +102,7 @@ Your file must have columns:<br>
 The app will calculate cumulative boundaries and generate the chart.
 """, unsafe_allow_html=True)
 
-# --- File uploader with clear-on-submit form ---
+# --- File uploader with clear-on-submit form and graph title input ---
 with st.form("upload_form", clear_on_submit=True):
     uploaded_files = st.file_uploader(
         "Upload Excel files", type=["xlsx"], accept_multiple_files=True, key="uploader"
