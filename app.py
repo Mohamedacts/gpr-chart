@@ -67,8 +67,8 @@ def plot_gpr_chart(df, graph_title):
         ),
         font=dict(color='black'),
         autosize=False,
-        width=1200,   # Make chart wide
-        height=600,
+        width=1400,   # Wide and rectangular
+        height=500,   # Not square
         xaxis=dict(
             title=dict(text='Chainage (m)', font=dict(color='black')),
             showline=True, linewidth=3, linecolor='black', mirror=True, ticks='outside',
