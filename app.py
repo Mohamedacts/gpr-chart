@@ -15,23 +15,16 @@ password_protect()
 
 def process_gpr_excel(file):
     df = pd.read_excel(file, engine="openpyxl")
-    # Lowercase and strip column names for robust matching
     df.columns = [str(col).strip().lower() for col in df.columns]
-    # Identify layer columns dynamically
     layer_cols = [col for col in df.columns if "layer" in col]
     if len(layer_cols) < 3:
         st.error("Excel file must have at least columns: layer 1, layer 2, layer 3.")
         return None
-    # Use up to 4 layers if available
     layer_cols = layer_cols[:4]
     df_layers = df[layer_cols].copy()
-    # Standardize column names
     std_names = ["Layer 1", "Layer 2", "Layer 3", "Layer 4"]
     df_layers.columns = std_names[:len(layer_cols)]
-    # Add Chainage column (0.25, 0.50, ...)
     df_layers.insert(0, 'Chainage', [(i+1)*0.25 for i in range(len(df_layers))])
-
-    # Prepare boundaries
     boundaries = []
     for _, row in df_layers.iterrows():
         vals = [row.get(name) for name in std_names[:len(layer_cols)]]
@@ -48,13 +41,11 @@ def process_gpr_excel(file):
         while len(cumsums) < len(layer_cols):
             cumsums.append(None)
         boundaries.append(cumsums)
-
-    # Add boundary columns
     for idx, name in enumerate(std_names[:len(layer_cols)]):
         df_layers[f"{name}_boundary"] = [b[idx] for b in boundaries]
     return df_layers
 
-def plot_gpr_chart(df, file_name):
+def plot_gpr_chart(df, graph_title):
     color_map = {
         "Layer 1": "black",
         "Layer 2": "rgb(0,112,192)",
@@ -71,7 +62,7 @@ def plot_gpr_chart(df, file_name):
             ))
     fig.update_layout(
         title=dict(
-            text=file_name,
+            text=graph_title,
             font=dict(color='black')
         ),
         font=dict(color='black'),
@@ -119,11 +110,15 @@ Your file must have columns:<br>
 The app will calculate cumulative boundaries and generate the chart.
 """, unsafe_allow_html=True)
 
-uploaded_files = st.file_uploader(
-    "Upload Excel files", type=["xlsx"], accept_multiple_files=True
-)
+# --- File uploader with clear-on-submit form ---
+with st.form("upload_form", clear_on_submit=True):
+    uploaded_files = st.file_uploader(
+        "Upload Excel files", type=["xlsx"], accept_multiple_files=True, key="uploader"
+    )
+    graph_title = st.text_input("Enter graph title (will appear on chart):", value="GPR Depth Profile")
+    submitted = st.form_submit_button("Process / Clear All Files")
 
-if uploaded_files:
+if uploaded_files and submitted:
     for file in uploaded_files:
         file_name = file.name
         df = process_gpr_excel(file)
@@ -132,15 +127,13 @@ if uploaded_files:
         st.subheader(f"Preview of processed data for: {file_name}")
         st.write(df.head(20))  # Show the first 20 rows for debugging
 
-        # Check if all boundary columns are empty
         boundary_cols = [col for col in df.columns if col.endswith("_boundary")]
         if all(df[col].notnull().sum() == 0 for col in boundary_cols):
             st.warning("No valid data to plot. Please check your Excel file for correct structure and numeric values.")
         else:
-            fig = plot_gpr_chart(df, file_name.split('.')[0])
+            fig = plot_gpr_chart(df, graph_title)
             st.subheader(f"Chart for: {file_name}")
             st.plotly_chart(fig, use_container_width=True)
-            # Download as PNG (Plotly >=5.0 required)
             try:
                 img_bytes = fig.to_image(format="png")
                 st.download_button(
