@@ -3,6 +3,16 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 
+# --- Password protection ---
+def password_protect():
+    st.title("GPR Depth Profile Chart Generator")
+    password = st.text_input("Enter password to access the app:", type="password")
+    if password != "MohamedAli":
+        st.warning("Please enter the correct password.")
+        st.stop()
+
+password_protect()
+
 def process_gpr_excel(file):
     df = pd.read_excel(file, engine="openpyxl")
     # Lowercase and strip column names for robust matching
@@ -89,8 +99,18 @@ def plot_gpr_chart(df, file_name):
     fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='lightgray')
     return fig
 
-st.set_page_config(page_title="GPR Depth Profile Chart Generator", layout="wide")
-st.title("GPR Depth Profile Chart Generator")
+st.markdown(
+    """
+    <style>
+    .main, .block-container, .stTextInput label, .stTextInput input, .stButton button, .stMarkdown, .stSubheader, .stTitle {
+        color: black !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+st.header("Welcome to the GPR Depth Profile Chart Generator", divider="rainbow")
 
 st.markdown("""
 Upload one or more Excel files with GPR data.<br>
@@ -131,3 +151,11 @@ if uploaded_files:
                 )
             except Exception as e:
                 st.info("PNG download not available. (Plotly version may be <5.0 or kaleido not installed)")
+
+# --- Credit at the bottom ---
+st.markdown("""
+---
+**Mohamed Ali**  
+Pavement Engineer  
+📞 +966581764292
+""")
