@@ -6,20 +6,23 @@ import numpy as np
 def process_gpr_excel(file):
     # Read Excel (assume first sheet, header in row 1)
     df = pd.read_excel(file, engine="openpyxl")
-    # Only keep the first 4 columns
-    df = df.iloc[:, :4]
-    df.columns = ['AC', 'Base', 'SubBase', 'Lower SubBase']
-    df.insert(0, 'Chainage', [(i+1)*0.25 for i in range(len(df))])
+    # Use columns 2-5 for AC, Base, SubBase, Lower SubBase
+    if df.shape[1] < 5:
+        st.error("Excel file must have at least 5 columns: [index/chainage/ID], AC, Base, SubBase, Lower SubBase.")
+        return None
+    df_layers = df.iloc[:, 1:5].copy()
+    df_layers.columns = ['AC', 'Base', 'SubBase', 'Lower SubBase']
+    # Add Chainage column (0.25, 0.50, ...)
+    df_layers.insert(0, 'Chainage', [(i+1)*0.25 for i in range(len(df_layers))])
 
     # Prepare boundaries columns
     ac_b, base_b, subbase_b, lowersubbase_b = [], [], [], []
 
-    for _, row in df.iterrows():
+    for _, row in df_layers.iterrows():
         vals = [row['AC'], row['Base'], row['SubBase'], row['Lower SubBase']]
         cumsums = []
         running_sum = 0
         for v in vals:
-            # If value is missing or not a number, stop and fill the rest with None
             if v is None or (isinstance(v, float) and np.isnan(v)):
                 break
             try:
@@ -27,7 +30,6 @@ def process_gpr_excel(file):
             except Exception:
                 break
             cumsums.append(running_sum)
-        # Fill the rest with None if missing found
         while len(cumsums) < 4:
             cumsums.append(None)
         ac_b.append(cumsums[0])
@@ -35,11 +37,11 @@ def process_gpr_excel(file):
         subbase_b.append(cumsums[2])
         lowersubbase_b.append(cumsums[3])
 
-    df['AC_boundary'] = ac_b
-    df['Base_boundary'] = base_b
-    df['SubBase_boundary'] = subbase_b
-    df['LowerSubBase_boundary'] = lowersubbase_b
-    return df
+    df_layers['AC_boundary'] = ac_b
+    df_layers['Base_boundary'] = base_b
+    df_layers['SubBase_boundary'] = subbase_b
+    df_layers['LowerSubBase_boundary'] = lowersubbase_b
+    return df_layers
 
 def plot_gpr_chart(df, file_name):
     colors = {
@@ -49,7 +51,6 @@ def plot_gpr_chart(df, file_name):
         'Lower SubBase': 'rgb(112,173,71)'
     }
     fig = go.Figure()
-    # Only plot if there is at least one non-null value in the series
     if df['AC_boundary'].notnull().any():
         fig.add_trace(go.Scatter(
             x=df['Chainage'], y=df['AC_boundary'],
@@ -96,9 +97,13 @@ st.title("GPR Depth Profile Chart Generator")
 
 st.markdown("""
 Upload one or more Excel files with GPR data.<br>
-Each file should have columns:<br>
-<b>B:</b> AC, <b>C:</b> Base, <b>D:</b> SubBase, <b>E:</b> Lower SubBase (row 1 headers).<br>
-The app will generate a chart for each file, with your specified formatting.
+Each file should have **five columns**:<br>
+<b>First column:</b> Index, location, or chainage<br>
+<b>Second:</b> AC<br>
+<b>Third:</b> Base<br>
+<b>Fourth:</b> SubBase<br>
+<b>Fifth:</b> Lower SubBase<br>
+The app will calculate cumulative boundaries and generate the required chart.
 """, unsafe_allow_html=True)
 
 uploaded_files = st.file_uploader(
@@ -109,6 +114,8 @@ if uploaded_files:
     for file in uploaded_files:
         file_name = file.name
         df = process_gpr_excel(file)
+        if df is None:
+            continue
         st.subheader(f"Preview of processed data for: {file_name}")
         st.write(df.head(20))  # Show the first 20 rows for debugging
 
