@@ -4,22 +4,27 @@ import plotly.graph_objects as go
 import numpy as np
 
 def process_gpr_excel(file):
-    # Read Excel (assume first sheet, header in row 1)
     df = pd.read_excel(file, engine="openpyxl")
-    # Use columns 2-5 for AC, Base, SubBase, Lower SubBase
-    if df.shape[1] < 5:
-        st.error("Excel file must have at least 5 columns: [index/chainage/ID], AC, Base, SubBase, Lower SubBase.")
+    # Ensure lowercase for matching
+    df.columns = [str(col).strip().lower() for col in df.columns]
+    # Identify layer columns dynamically
+    layer_cols = [col for col in df.columns if "layer" in col]
+    if len(layer_cols) < 3:
+        st.error("Excel file must have at least columns: layer 1, layer 2, layer 3.")
         return None
-    df_layers = df.iloc[:, 1:5].copy()
-    df_layers.columns = ['AC', 'Base', 'SubBase', 'Lower SubBase']
+    # Use up to 4 layers if available
+    layer_cols = layer_cols[:4]
+    df_layers = df[layer_cols].copy()
+    # Standardize column names
+    std_names = ["Layer 1", "Layer 2", "Layer 3", "Layer 4"]
+    df_layers.columns = std_names[:len(layer_cols)]
     # Add Chainage column (0.25, 0.50, ...)
     df_layers.insert(0, 'Chainage', [(i+1)*0.25 for i in range(len(df_layers))])
 
-    # Prepare boundaries columns
-    ac_b, base_b, subbase_b, lowersubbase_b = [], [], [], []
-
+    # Prepare boundaries
+    boundaries = []
     for _, row in df_layers.iterrows():
-        vals = [row['AC'], row['Base'], row['SubBase'], row['Lower SubBase']]
+        vals = [row.get(name) for name in std_names[:len(layer_cols)]]
         cumsums = []
         running_sum = 0
         for v in vals:
@@ -30,47 +35,30 @@ def process_gpr_excel(file):
             except Exception:
                 break
             cumsums.append(running_sum)
-        while len(cumsums) < 4:
+        while len(cumsums) < len(layer_cols):
             cumsums.append(None)
-        ac_b.append(cumsums[0])
-        base_b.append(cumsums[1])
-        subbase_b.append(cumsums[2])
-        lowersubbase_b.append(cumsums[3])
+        boundaries.append(cumsums)
 
-    df_layers['AC_boundary'] = ac_b
-    df_layers['Base_boundary'] = base_b
-    df_layers['SubBase_boundary'] = subbase_b
-    df_layers['LowerSubBase_boundary'] = lowersubbase_b
+    # Add boundary columns
+    for idx, name in enumerate(std_names[:len(layer_cols)]):
+        df_layers[f"{name}_boundary"] = [b[idx] for b in boundaries]
     return df_layers
 
 def plot_gpr_chart(df, file_name):
-    colors = {
-        'AC': 'black',
-        'Base': 'rgb(0,112,192)',
-        'SubBase': 'rgb(237,125,49)',
-        'Lower SubBase': 'rgb(112,173,71)'
+    color_map = {
+        "Layer 1": "black",
+        "Layer 2": "rgb(0,112,192)",
+        "Layer 3": "rgb(237,125,49)",
+        "Layer 4": "rgb(112,173,71)"
     }
     fig = go.Figure()
-    if df['AC_boundary'].notnull().any():
-        fig.add_trace(go.Scatter(
-            x=df['Chainage'], y=df['AC_boundary'],
-            mode='lines', name='AC', line=dict(color=colors['AC'], width=3)
-        ))
-    if df['Base_boundary'].notnull().any():
-        fig.add_trace(go.Scatter(
-            x=df['Chainage'], y=df['Base_boundary'],
-            mode='lines', name='Base', line=dict(color=colors['Base'], width=3)
-        ))
-    if df['SubBase_boundary'].notnull().any():
-        fig.add_trace(go.Scatter(
-            x=df['Chainage'], y=df['SubBase_boundary'],
-            mode='lines', name='SubBase', line=dict(color=colors['SubBase'], width=3)
-        ))
-    if df['LowerSubBase_boundary'].notnull().any():
-        fig.add_trace(go.Scatter(
-            x=df['Chainage'], y=df['LowerSubBase_boundary'],
-            mode='lines', name='Lower SubBase', line=dict(color=colors['Lower SubBase'], width=3)
-        ))
+    for layer in [col for col in df.columns if col.endswith("_boundary")]:
+        base_name = layer.replace("_boundary", "")
+        if df[layer].notnull().any():
+            fig.add_trace(go.Scatter(
+                x=df['Chainage'], y=df[layer],
+                mode='lines', name=base_name, line=dict(color=color_map.get(base_name, "gray"), width=3)
+            ))
     fig.update_layout(
         title=file_name,
         xaxis=dict(
@@ -97,13 +85,9 @@ st.title("GPR Depth Profile Chart Generator")
 
 st.markdown("""
 Upload one or more Excel files with GPR data.<br>
-Each file should have **five columns**:<br>
-<b>First column:</b> Index, location, or chainage<br>
-<b>Second:</b> AC<br>
-<b>Third:</b> Base<br>
-<b>Fourth:</b> SubBase<br>
-<b>Fifth:</b> Lower SubBase<br>
-The app will calculate cumulative boundaries and generate the required chart.
+Your file must have columns:<br>
+<b>file name</b> (or similar), <b>layer 1</b>, <b>layer 2</b>, <b>layer 3</b>, and optionally <b>layer 4</b>.<br>
+The app will calculate cumulative boundaries and generate the chart.
 """, unsafe_allow_html=True)
 
 uploaded_files = st.file_uploader(
@@ -120,12 +104,8 @@ if uploaded_files:
         st.write(df.head(20))  # Show the first 20 rows for debugging
 
         # Check if all boundary columns are empty
-        if (
-            df['AC_boundary'].notnull().sum() == 0 and
-            df['Base_boundary'].notnull().sum() == 0 and
-            df['SubBase_boundary'].notnull().sum() == 0 and
-            df['LowerSubBase_boundary'].notnull().sum() == 0
-        ):
+        boundary_cols = [col for col in df.columns if col.endswith("_boundary")]
+        if all(df[col].notnull().sum() == 0 for col in boundary_cols):
             st.warning("No valid data to plot. Please check your Excel file for correct structure and numeric values.")
         else:
             fig = plot_gpr_chart(df, file_name.split('.')[0])
