@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import numpy as np
 
 # --- Function to process a single Excel file and return processed DataFrame ---
 def process_gpr_excel(file):
@@ -25,20 +26,20 @@ def process_gpr_excel(file):
             boundaries.append(vals)
             continue
         # Base boundary
-        if pd.notnull(row['Base']) and pd.notnull(vals[0]):
-            vals[1] = vals[0] + row['Base']
+        if pd.notnull(row['Base']):
+            vals[1] = vals[0] + row['Base'] if pd.notnull(vals[0]) else None
         else:
             boundaries.append(vals)
             continue
         # SubBase boundary
-        if pd.notnull(row['SubBase']) and pd.notnull(vals[1]):
-            vals[2] = vals[1] + row['SubBase']
+        if pd.notnull(row['SubBase']):
+            vals[2] = vals[1] + row['SubBase'] if pd.notnull(vals[1]) else None
         else:
             boundaries.append(vals)
             continue
         # Lower SubBase boundary
-        if pd.notnull(row['Lower SubBase']) and pd.notnull(vals[2]):
-            vals[3] = vals[2] + row['Lower SubBase']
+        if pd.notnull(row['Lower SubBase']):
+            vals[3] = vals[2] + row['Lower SubBase'] if pd.notnull(vals[2]) else None
         boundaries.append(vals)
     # Add boundaries to DataFrame
     df['AC_boundary'] = [b[0] for b in boundaries]
@@ -131,4 +132,3 @@ if uploaded_files:
             )
         except Exception as e:
             st.info("PNG download not available. (Plotly version may be <5.0 or kaleido not installed)")
-
