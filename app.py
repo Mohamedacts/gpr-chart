@@ -2,30 +2,26 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
-import math
-
-# --- Password protection ---
-def password_protect():
-    st.title("GPR Depth Profile Chart Generator")
-    password = st.text_input("Enter password to access the app:", type="password")
-    if password != "MohamedAli":
-        st.warning("Please enter the correct password.")
-        st.stop()
-
-password_protect()
 
 def process_gpr_excel(file):
     df = pd.read_excel(file, engine="openpyxl")
+    # Lowercase and strip column names for robust matching
     df.columns = [str(col).strip().lower() for col in df.columns]
+    # Identify layer columns dynamically
     layer_cols = [col for col in df.columns if "layer" in col]
     if len(layer_cols) < 3:
         st.error("Excel file must have at least columns: layer 1, layer 2, layer 3.")
         return None
+    # Use up to 4 layers if available
     layer_cols = layer_cols[:4]
     df_layers = df[layer_cols].copy()
+    # Standardize column names
     std_names = ["Layer 1", "Layer 2", "Layer 3", "Layer 4"]
     df_layers.columns = std_names[:len(layer_cols)]
+    # Add Chainage column (0.25, 0.50, ...)
     df_layers.insert(0, 'Chainage', [(i+1)*0.25 for i in range(len(df_layers))])
+
+    # Prepare boundaries
     boundaries = []
     for _, row in df_layers.iterrows():
         vals = [row.get(name) for name in std_names[:len(layer_cols)]]
@@ -42,30 +38,13 @@ def process_gpr_excel(file):
         while len(cumsums) < len(layer_cols):
             cumsums.append(None)
         boundaries.append(cumsums)
+
+    # Add boundary columns
     for idx, name in enumerate(std_names[:len(layer_cols)]):
         df_layers[f"{name}_boundary"] = [b[idx] for b in boundaries]
     return df_layers
 
-def nice_tick_interval(data_min, data_max, target_ticks=10):
-    """Choose a 'nice' tick interval for the axis given data range and target number of ticks."""
-    data_range = data_max - data_min
-    if data_range == 0:
-        return 1
-    raw_interval = data_range / target_ticks
-    # Round to nearest 1, 2, 5, or 10 multiple
-    magnitude = 10 ** math.floor(math.log10(raw_interval))
-    residual = raw_interval / magnitude
-    if residual < 1.5:
-        nice = 1 * magnitude
-    elif residual < 3:
-        nice = 2 * magnitude
-    elif residual < 7:
-        nice = 5 * magnitude
-    else:
-        nice = 10 * magnitude
-    return nice
-
-def plot_gpr_chart(df, graph_title):
+def plot_gpr_chart(df, file_name):
     color_map = {
         "Layer 1": "black",
         "Layer 2": "rgb(0,112,192)",
@@ -80,35 +59,21 @@ def plot_gpr_chart(df, graph_title):
                 x=df['Chainage'], y=df[layer],
                 mode='lines', name=base_name, line=dict(color=color_map.get(base_name, "gray"), width=3)
             ))
-
-    # X-axis: full chainage, nice interval
-    min_chainage = float(df['Chainage'].min())
-    max_chainage = float(df['Chainage'].max())
-    tick0 = min_chainage
-    dtick = nice_tick_interval(min_chainage, max_chainage, target_ticks=10)
-
     fig.update_layout(
         title=dict(
-            text=graph_title,
+            text=file_name,
             font=dict(color='black')
         ),
         font=dict(color='black'),
-        autosize=False,
-        width=1400,   # Wide and rectangular
-        height=500,   # Not square
         xaxis=dict(
             title=dict(text='Chainage (m)', font=dict(color='black')),
             showline=True, linewidth=3, linecolor='black', mirror=True, ticks='outside',
-            tickfont=dict(color='black'),
-            tickmode='linear',
-            tick0=tick0,
-            dtick=dtick,
-            range=[min_chainage, max_chainage]
+            tickfont=dict(color='black')
         ),
         yaxis=dict(
             title=dict(text='Depth (m)', font=dict(color='black')),
             showline=True, linewidth=3, linecolor='black', mirror=True, ticks='outside',
-            autorange=False, range=[100, 0], dtick=10, gridcolor='lightgray',
+            autorange='reversed', range=[100, 0], dtick=10, gridcolor='lightgray',
             tickfont=dict(color='black')
         ),
         plot_bgcolor='white',
@@ -117,13 +82,15 @@ def plot_gpr_chart(df, graph_title):
             orientation='h', yanchor='bottom', y=-0.25, xanchor='center', x=0.5,
             font=dict(color='black')
         ),
-        margin=dict(l=60, r=20, t=60, b=60)
+        margin=dict(l=60, r=20, t=60, b=60),
+        height=600
     )
     fig.update_xaxes(showgrid=False)
     fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='lightgray')
     return fig
 
-st.header("Welcome to the GPR Depth Profile Chart Generator", divider="rainbow")
+st.set_page_config(page_title="GPR Depth Profile Chart Generator", layout="wide")
+st.title("GPR Depth Profile Chart Generator")
 
 st.markdown("""
 Upload one or more Excel files with GPR data.<br>
@@ -132,15 +99,11 @@ Your file must have columns:<br>
 The app will calculate cumulative boundaries and generate the chart.
 """, unsafe_allow_html=True)
 
-# --- File uploader with clear-on-submit form and graph title input ---
-with st.form("upload_form", clear_on_submit=True):
-    uploaded_files = st.file_uploader(
-        "Upload Excel files", type=["xlsx"], accept_multiple_files=True, key="uploader"
-    )
-    graph_title = st.text_input("Enter graph title (will appear on chart):", value="GPR Depth Profile")
-    submitted = st.form_submit_button("Process / Clear All Files")
+uploaded_files = st.file_uploader(
+    "Upload Excel files", type=["xlsx"], accept_multiple_files=True
+)
 
-if uploaded_files and submitted:
+if uploaded_files:
     for file in uploaded_files:
         file_name = file.name
         df = process_gpr_excel(file)
@@ -149,13 +112,15 @@ if uploaded_files and submitted:
         st.subheader(f"Preview of processed data for: {file_name}")
         st.write(df.head(20))  # Show the first 20 rows for debugging
 
+        # Check if all boundary columns are empty
         boundary_cols = [col for col in df.columns if col.endswith("_boundary")]
         if all(df[col].notnull().sum() == 0 for col in boundary_cols):
             st.warning("No valid data to plot. Please check your Excel file for correct structure and numeric values.")
         else:
-            fig = plot_gpr_chart(df, graph_title)
+            fig = plot_gpr_chart(df, file_name.split('.')[0])
             st.subheader(f"Chart for: {file_name}")
             st.plotly_chart(fig, use_container_width=True)
+            # Download as PNG (Plotly >=5.0 required)
             try:
                 img_bytes = fig.to_image(format="png")
                 st.download_button(
@@ -166,11 +131,3 @@ if uploaded_files and submitted:
                 )
             except Exception as e:
                 st.info("PNG download not available. (Plotly version may be <5.0 or kaleido not installed)")
-
-# --- Credit at the bottom ---
-st.markdown("""
----
-**Mohamed Ali**  
-Pavement Engineer  
-📞 +966581764292
-""")
