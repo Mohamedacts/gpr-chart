@@ -10,29 +10,32 @@ def process_gpr_excel(file):
     df.columns = ['AC', 'Base', 'SubBase', 'Lower SubBase']
     df.insert(0, 'Chainage', [(i+1)*0.25 for i in range(len(df))])
 
-    # Prepare boundaries DataFrame
-    boundaries = pd.DataFrame(index=df.index, columns=['AC_boundary', 'Base_boundary', 'SubBase_boundary', 'LowerSubBase_boundary'])
+    # Prepare boundaries columns
+    ac_b, base_b, subbase_b, lowersubbase_b = [], [], [], []
 
-    # For each row, compute cumulative sum, but set all after first missing to NaN
-    for idx, row in df.iterrows():
+    for _, row in df.iterrows():
         vals = [row['AC'], row['Base'], row['SubBase'], row['Lower SubBase']]
-        # Find first missing
-        try:
-            first_nan = next(i for i, v in enumerate(vals) if pd.isnull(v))
-        except StopIteration:
-            first_nan = 4  # No missing, use all
-        # Compute cumulative sum up to first missing
-        valid_vals = vals[:first_nan]
-        cumsums = pd.Series(valid_vals).cumsum().tolist()
-        # Fill boundaries: cumsums, then NaN for the rest
-        full = cumsums + [np.nan] * (4 - len(cumsums))
-        boundaries.loc[idx] = full
+        cumsums = []
+        running_sum = 0
+        for v in vals:
+            if pd.isnull(v):
+                # Fill the rest with None and break
+                while len(cumsums) < 4:
+                    cumsums.append(None)
+                break
+            running_sum += v
+            cumsums.append(running_sum)
+        while len(cumsums) < 4:
+            cumsums.append(None)
+        ac_b.append(cumsums[0])
+        base_b.append(cumsums[1])
+        subbase_b.append(cumsums[2])
+        lowersubbase_b.append(cumsums[3])
 
-    # Add boundaries to DataFrame
-    df['AC_boundary'] = boundaries['AC_boundary']
-    df['Base_boundary'] = boundaries['Base_boundary']
-    df['SubBase_boundary'] = boundaries['SubBase_boundary']
-    df['LowerSubBase_boundary'] = boundaries['LowerSubBase_boundary']
+    df['AC_boundary'] = ac_b
+    df['Base_boundary'] = base_b
+    df['SubBase_boundary'] = subbase_b
+    df['LowerSubBase_boundary'] = lowersubbase_b
     return df
 
 def plot_gpr_chart(df, file_name):
